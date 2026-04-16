@@ -332,15 +332,31 @@ async function saveData() {
   }
 }
 
-// ======= Date helpers =======
+// ======= Date helpers (all in America/Chicago / Central Time) =======
+// Day rolls over at 12:00 AM CST/CDT (Chicago automatically handles DST)
+function chicagoDateStr(date) {
+  // en-CA locale gives YYYY-MM-DD format
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
 function todayStr() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
+  return chicagoDateStr(new Date());
 }
 function daysAgoStr(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  // Get today's Chicago date, then walk back n days on that calendar date
+  const todayChicago = todayStr(); // e.g. '2026-04-15'
+  const [y, m, d] = todayChicago.split('-').map(Number);
+  // Construct as UTC to avoid local TZ shifting the day
+  const base = new Date(Date.UTC(y, m - 1, d));
+  base.setUTCDate(base.getUTCDate() - n);
+  const yy = base.getUTCFullYear();
+  const mm = String(base.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(base.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
 }
 
 // ======= User ops =======
@@ -628,6 +644,18 @@ document.getElementById('nutInput').addEventListener('keydown', e => {
   } else if (currentUser && data.users[currentUser]) {
     showDashboard();
   }
+
+  // Auto-rollover: re-render whenever the Chicago date changes
+  let lastDate = todayStr();
+  setInterval(() => {
+    const now = todayStr();
+    if (now !== lastDate) {
+      lastDate = now;
+      if (currentUser && currentUser !== 'admin' && data.users[currentUser]) {
+        render();
+      }
+    }
+  }, 30 * 1000); // check every 30 seconds
 })();
 </script>
 </body>
