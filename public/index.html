@@ -204,7 +204,7 @@
     </div>
 
     <div class="card">
-      <h2>Log Nuts Eaten</h2>
+      <h2>Log Nuts Busted</h2>
       <div class="add-row">
         <input type="number" id="nutInput" placeholder="How many nuts?" min="1" />
         <button onclick="addNuts()">Add to Today</button>
@@ -250,10 +250,29 @@
       </table>
     </div>
 
+  <!-- ADMIN PANEL -->
+  <div id="adminPanel" class="hidden">
+    <div class="card user-bar">
+      <div class="welcome">🛠️ Admin Panel</div>
+      <div>
+        <button class="secondary" onclick="logout()">Sign Out</button>
+      </div>
+    </div>
+
     <div class="card">
-      <h2>📈 Last 14 Days — All Players</h2>
-      <svg id="chart" viewBox="0 0 800 340" preserveAspectRatio="none"></svg>
-      <div class="legend" id="legend"></div>
+      <h2>Manage Players</h2>
+      <p class="hint" style="margin-bottom: 14px;">Remove any logged player and all of their data. This cannot be undone.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th>Total Nuts</th>
+            <th>Days Logged</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="adminPlayerList"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -321,6 +340,15 @@ function daysAgoStr(n) {
 async function login() {
   const name = document.getElementById('usernameInput').value.trim();
   if (!name) { alert('Please enter a username.'); return; }
+
+  // Admin route — does not create a user
+  if (name.toLowerCase() === 'admin') {
+    currentUser = 'admin';
+    localStorage.setItem(SESSION_KEY, 'admin');
+    showAdminPanel();
+    return;
+  }
+
   if (!data.users[name]) {
     data.users[name] = { entries: {} };
     await saveData();
@@ -333,6 +361,7 @@ function logout() {
   currentUser = null;
   localStorage.removeItem(SESSION_KEY);
   document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('adminPanel').classList.add('hidden');
   document.getElementById('loginCard').classList.remove('hidden');
   document.getElementById('usernameInput').value = '';
 }
@@ -376,9 +405,59 @@ function userAvg(entries) {
 // ======= Render =======
 function showDashboard() {
   document.getElementById('loginCard').classList.add('hidden');
+  document.getElementById('adminPanel').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
   document.getElementById('currentUser').textContent = currentUser;
   render();
+}
+
+function showAdminPanel() {
+  document.getElementById('loginCard').classList.add('hidden');
+  document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('adminPanel').classList.remove('hidden');
+  renderAdminList();
+}
+
+function renderAdminList() {
+  const tbody = document.getElementById('adminPlayerList');
+  const rows = Object.entries(data.users).map(([name, u]) => ({
+    name,
+    total: userTotal(u.entries),
+    days: userDayCount(u.entries)
+  })).sort((a, b) => b.total - a.total);
+
+  tbody.innerHTML = '';
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">No players logged yet.</td></tr>';
+    return;
+  }
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const td1 = document.createElement('td');
+    td1.textContent = r.name;
+    const td2 = document.createElement('td');
+    td2.textContent = r.total;
+    const td3 = document.createElement('td');
+    td3.textContent = r.days;
+    const td4 = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.className = 'danger';
+    btn.textContent = 'Remove';
+    btn.onclick = () => removePlayer(r.name);
+    td4.appendChild(btn);
+    tr.appendChild(td1);
+    tr.appendChild(td2);
+    tr.appendChild(td3);
+    tr.appendChild(td4);
+    tbody.appendChild(tr);
+  });
+}
+
+async function removePlayer(name) {
+  if (!confirm(`Remove player "${name}" and all their data? This cannot be undone.`)) return;
+  delete data.users[name];
+  renderAdminList();
+  await saveData();
 }
 
 function render() {
@@ -537,7 +616,9 @@ document.getElementById('nutInput').addEventListener('keydown', e => {
   loginBtn.disabled = false;
   loginHint.textContent = "New username? You'll be created automatically. Existing? You'll pick up where you left off.";
 
-  if (currentUser && data.users[currentUser]) {
+  if (currentUser === 'admin') {
+    showAdminPanel();
+  } else if (currentUser && data.users[currentUser]) {
     showDashboard();
   }
 })();
